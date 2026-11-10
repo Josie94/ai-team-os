@@ -1,0 +1,130 @@
+/* 在原型样式之上补齐的少量增量样式（不改原类名） */
+a.nav-item {
+  text-decoration: none;
+}
+.nav-item {
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  width: 100%;
+}
+.page-loading {
+  padding: 60px 32px;
+  color: var(--faint);
+  font-size: 13px;
+}
+.empty-note {
+  padding: 26px 0;
+  color: var(--faint);
+  font-size: 12.5px;
+}
+.space-y > * + * {
+  margin-top: 12px;
+}
+.tl-row {
+  cursor: pointer;
+}
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.chat-side .convo-scroll {
+  overflow-y: auto;
+}
+.md p {
+  margin: 0 0 10px;
+}
+.md pre {
+  background: #f6f7f9;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  overflow: auto;
+}
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  border-radius: 11px;
+  font-size: 12.5px;
+  margin-bottom: 14px;
+  border: 1px solid;
+}
+.banner.warn {
+  background: var(--gold-soft);
+  border-color: #f0dcb8;
+  color: #8a5a12;
+}
+.banner.ok {
+  background: var(--moss-soft);
+  border-color: #cbe9d4;
+  color: #15703a;
+}
+.banner.bad {
+  background: #fdecec;
+  border-color: #f6cccc;
+  color: #a12a2a;
+}
+.form-field {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.form-field input,
+.form-field select {
+  width: 100%;
+  height: 34px;
+  margin-top: 4px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: var(--ink);
+  background: #fff;
+}
+.form-field input:focus {
+  outline: 2px solid #dbe3ff;
+  border-color: #b9c5ff;
+}
+.tool-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 0;
+  border-top: 1px solid var(--line-soft);
+  font-size: 12px;
+}
+.tool-row:first-child {
+  border-top: 0;
+}
+.tool-row .mono {
+  font-size: 11.5px;
+  color: var(--ink);
+}
+.tool-row .wl {
+  margin-left: auto;
+  color: var(--faint);
+  font-size: 10.5px;
+}
+
+/* 步骤表：员工列不换行，状态列留白 */
+.steps td:nth-child(2){white-space:nowrap;}
+.steps td:nth-child(6){white-space:nowrap;}
+.tl-row .av-sm{width:22px;height:22px;font-size:10.5px;font-weight:700;color:#fff;}
+.steps td:nth-child(2){min-width:74px;}
+/* 运行页：交付物优先于事件流展示 */
+.run-grid .space-y{display:flex;flex-direction:column;}
+.run-grid .deliverable-panel{order:-1;}
+
+/* 对话流式：气泡末尾显示打字光标 */
+.bubble.streaming::after {
+  content: '▍';
+  color: var(--sky, #3F6FB5);
+  animation: sse-caret 0.9s steps(2) infinite;
+  margin-left: 1px;
+}
+@keyframes sse-caret {
+  0%, 45% { opacity: 1; }
+  50%, 95% { opacity: 0; }
+}
