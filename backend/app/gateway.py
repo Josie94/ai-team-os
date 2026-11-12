@@ -96,7 +96,11 @@ class ModelGateway:
 
     # ---------- 任务规划 ----------
     def plan(self, goal: str) -> list[dict]:
-        """产出 Step 列表：agent / title / tool / args。"""
+        """产出 Step 列表：agent / title / tool / args。
+
+        Phase 2 扩展：可带 depends_on（上游节点）与 skill（技能引用）。
+        depends_on 用 node_id 表达；无依赖声明时按 Phase 1 语义串行。
+        """
         if self.live:
             prompt = (
                 "你是企业内网 AI 团队的协调器。请把下面的目标拆成 4-6 个可执行步骤，"
@@ -105,6 +109,8 @@ class ModelGateway:
                 "可用工具：llm.generate、web.search、web.fetch、fs.read、fs.hash、"
                 "fs.write_project、feishu.message。"
                 "最后一步必须是 feishu.message（外发/通知），用于人工审批断点。"
+                "如果某些步骤互不依赖，可在 args 中加 depends_on 列出上游节点的 node_id"
+                '（形如 {"node_id":"n1","depends_on":["n0"]}），没有依赖就不写这个字段。'
                 f"\n目标：{goal}"
             )
             raw = self.chat([{"role": "user", "content": prompt}], temperature=0.2, max_tokens=800)
@@ -124,12 +130,17 @@ class ModelGateway:
             for item in data:
                 if not isinstance(item, dict) or not item.get("title"):
                     continue
+                args = dict(item.get("args") or {})
+                # 规划器可能把 node_id / depends_on 放在顶层，这里归并进 args
+                for key in ("node_id", "depends_on", "skill"):
+                    if item.get(key) is not None:
+                        args.setdefault(key, item[key])
                 out.append(
                     {
                         "agent": item.get("agent") or "需求分析师",
                         "title": item["title"],
                         "tool": item.get("tool") or "llm.generate",
-                        "args": item.get("args") or {},
+                        "args": args,
                     }
                 )
             return out or None
@@ -141,12 +152,20 @@ class ModelGateway:
     def _offline_plan(goal: str) -> list[dict]:
         short = goal.strip().replace("\n", " ")[:40]
         return [
-            {"agent": "需求分析师", "title": f"拆解目标：{short}", "tool": "llm.generate", "args": {}},
-            {"agent": "研究助理", "title": "检索相关资料并去重", "tool": "web.search", "args": {"q": short}},
-            {"agent": "数据分析师", "title": "核对数据口径与来源", "tool": "fs.read", "args": {"path": "deliverables/context.md"}},
-            {"agent": "报告撰写", "title": "撰写交付物初稿", "tool": "fs.write_project", "args": {"path": f"deliverables/{short}.md"}},
-            {"agent": "合规审核", "title": "证据链校验（sha256）", "tool": "fs.hash", "args": {}},
-            {"agent": "报告撰写", "title": "外发评审并通知相关人", "tool": "feishu.message", "args": {"to": "product@team、research@team、quality@team"}},
+            {"agent": "需求分析师", "title": f"拆解目标：{short}", "tool": "llm.generate",
+             "args": {"node_id": "n1", "skill": "research.summary"}},
+            {"agent": "研究助理", "title": "检索相关资料并去重", "tool": "web.search",
+             "args": {"q": short, "node_id": "n2", "depends_on": ["n1"]}},
+            {"agent": "数据分析师", "title": "核对数据口径与来源", "tool": "fs.read",
+             "args": {"path": "deliverables/context.md", "node_id": "n3", "depends_on": ["n1"]}},
+            {"agent": "报告撰写", "title": "撰写交付物初稿", "tool": "fs.write_project",
+             "args": {"path": f"deliverables/{short}.md", "node_id": "n4",
+                      "depends_on": ["n2", "n3"], "skill": "report.draft"}},
+            {"agent": "合规审核", "title": "证据链校验（sha256）", "tool": "fs.hash",
+             "args": {"node_id": "n5", "depends_on": ["n4"], "skill": "evidence.hash"}},
+            {"agent": "报告撰写", "title": "外发评审并通知相关人", "tool": "feishu.message",
+             "args": {"to": "product@team、research@team、quality@team", "node_id": "n6",
+                      "depends_on": ["n5"], "skill": "notify.review"}},
         ]
 
     @staticmethod

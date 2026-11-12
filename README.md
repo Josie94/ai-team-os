@@ -1,15 +1,17 @@
-# AI Team OS · Phase 1 MVP
+# AI Team OS · Phase 1 MVP → Phase 2 编排
 
-企业内网 AI 多智能体协作平台的**最小闭环**实现：对话 → 单智能体执行 → 审批断点 → 断点续跑。
+企业内网 AI 多智能体协作平台。Phase 1 交付「对话 → 单智能体执行 → 审批断点 → 断点续跑」最小闭环；
+**Phase 2 把内部串行循环替换为自研 asyncio DAG 调度器**，支持多智能体并行调度、技能系统与工具风险注册。
+
 前端视觉与信息架构来自 `mmmm` 的前端原型（项目资产《前端页面设计.html》），样式与图标直接复用原型，未重画。
 
 ## 一、闭环长什么样
 
 ```
 用户在对话里提需求
-  → 命中"工作型"意图 → 创建 Task + Run + Step 计划（1 个 agent 串行）
-  → 逐步执行（llm.generate / web.search / fs.read / fs.write_project / fs.hash）
-  → 遇到 feishu.message（高风险）→ 创建 Approval，Run 停在 awaiting_approval
+  → 命中"工作型"意图 → 创建 Task + Run + Step 计划
+  → DAG 调度器按依赖关系并行执行（并发槽受限）
+  → 遇到 feishu.message（高风险）→ 创建 Approval，节点挂起（run 保持 running，兄弟节点继续）
   → 审批中心「通过并继续」→ 从落库的 step 断点继续，不重算已完成步骤
   → completed + 交付物（Markdown，带 sha256 证据链）+ audit 事件流
 ```
@@ -27,20 +29,68 @@ ai-team-os/
 │  │  ├─ state_machine.py   10 态状态机（服务端强约束）
 │  │  ├─ policy.py          工具风险注册表 + 白/灰名单判定
 │  │  ├─ gateway.py         Model Gateway（OpenAI 兼容，无 key 自动降级）
-│  │  ├─ runner.py          单 agent 执行器 + 审批断点 + 断点续跑
+│  │  ├─ dag.py             Phase 2：DAG 图模型 / 拓扑排序 / 环检测 / 就绪集
+│  │  ├─ skills.py          Phase 2：技能系统 v1（模板 + 工具组合 + 参数预设）
+│  │  ├─ runner.py          DAG 调度器 + 审批断点 + 断点续跑
 │  │  ├─ api/routes.py      REST API
-│  │  └─ seed.py            工具/模型档案/示例会话/示例任务
+│  │  └─ seed.py            工具/技能/模型档案/示例会话/示例任务
 │  ├─ migrations/init.sql   Postgres 16 + pgvector 建表
-│  └─ tests/test_flow.py    闭环回归（5 条）
+│  └─ tests/
+│     ├─ test_flow.py       Phase 1 闭环回归（5 条）
+│     └─ test_dag.py        Phase 2 DAG 场景（11 条）
 ├─ frontend/
 │  └─ src/
 │     ├─ styles/app.css     从原型抽取的完整设计系统（两段 style 合并）
-│     ├─ components/        Sprite（原型图标）/ StatusPill
+│     ├─ components/        Sprite（原型图标）/ StatusPill / DagView
 │     └─ pages/             Chat / Tasks / Run / Approvals / Models / Placeholder
 └─ docker-compose.yml       Postgres 16 + pgvector / Redis 7
 ```
 
-## 三、本地跑起来
+## 三、Phase 2 · DAG 编排
+
+### 依赖声明
+
+在 `Step.args` 里声明依赖（README §七 预留的 `depends_on` 字段）：
+
+```json
+{"node_id": "n2", "depends_on": ["n1"], "skill": "research.summary"}
+```
+
+- `node_id`：图内节点标识，缺省回落 `seq-{seq}`；
+- `depends_on`：上游节点（`node_id` 或 seq 数字皆可）；
+- **全图都没有依赖声明时自动按 `seq` 串成链** —— 与 Phase 1 串行行为完全等价。
+
+### 调度语义（对齐 A1–A5 定版）
+
+| 契约 | 实现 |
+|---|---|
+| A1① 挂审批时 run 保持 `running` | 断点由 step 粒度承载，兄弟节点继续调度 |
+| A1② 失败默认快速失败 | 任一节点失败 → `run→failed` |
+| A2 入口不变 | `execute_run(run_id, from_seq)` 签名与续跑语义保持 |
+| A3 并发槽 | 每节点启动 `slots_used += 1`、结束 `-= 1`，超槽排队 |
+| A4 工具风险 | `tools` 表字段冻结，新增工具只插数据 |
+| A5 事件总线 | 落库后 `publish`，Redis 多 worker 零改动 |
+
+### 技能系统 v1
+
+技能 = **提示词模板 + 工具组合 + 参数预设**，存 `skills` 表，节点用 `args.skill` 引用：
+
+```sql
+SELECT name, label, tools FROM skills WHERE enabled;
+```
+
+执行前自动展开进 `step.args`（注入 `prompt`）。技能被禁用 → 相关节点明确报错。
+技能市场（浏览/分享/安装）属 P2 迭代，`GET /api/skills` 已预留消费接口。
+
+### 新增接口
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/skills` | 技能清单 |
+| POST | `/api/skills/{name}/toggle` | 启停技能 |
+| GET | `/api/runs/{id}` | 追加 `dag` 字段：节点/依赖边/拓扑序/最大并行宽度 |
+
+## 四、本地跑起来
 
 > 界面预览（实际运行截图）：`docs/screenshots/01-chat.png` … `05-models.png`
 
@@ -124,14 +174,16 @@ uvicorn app.main:app --port 8000
 ## 六、测试
 
 ```bash
-cd backend && python3 -m pytest tests/test_flow.py -q
+cd backend && python3 -m pytest tests/ -q
 ```
 
-覆盖：对话建任务、闲聊不建任务、审批断点与续跑、幂等决策、驳回终止、非法状态迁移。
+- `tests/test_flow.py`（5 条，Phase 1 闭环回归）：对话建任务、闲聊不建任务、审批断点与续跑、幂等决策、驳回终止、非法状态迁移；
+- `tests/test_dag.py`（11 条，Phase 2 DAG 场景）：拓扑排序、环检测、线性回退串行、并行分支与汇聚、并行耗时验证、快速失败、未注册工具挂审批、审批挂起时兄弟节点继续、审批幂等与断点续跑不重算、并发槽排队、技能展开与禁用报错。
 
 ## 七、与后续阶段的接口约定
 
-- `execute_run(run_id, from_seq)` 是唯一执行入口，Phase 2 的 DAG 调度器替换其内部实现即可，API 不变
-- `slots_used / slots_total`（当前 1/16）留给并行调度
-- `Step.args` 里的 `depends_on` 预留 DAG 依赖字段
-- 知识库/记忆/技能页已留路由占位，P2 直接填实现
+- `execute_run(run_id, from_seq)` 是唯一执行入口，DAG 调度器替换其内部实现，API 不变
+- `slots_used / slots_total` 由调度器消费（当前 1/16）
+- `Step.args` 里的 `depends_on` 承载 DAG 依赖；`Step.args` 里的 `skill` 引用技能
+- `GET /api/skills` 为技能市场（P2 迭代）预留消费接口
+- 知识库/记忆页已留路由占位，P2 直接填实现

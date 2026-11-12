@@ -128,3 +128,34 @@ a.nav-item {
   0%, 45% { opacity: 1; }
   50%, 95% { opacity: 0; }
 }
+
+/* Phase 2：DAG 执行图（按拓扑层级展示并行节点与依赖边） */
+.dag-view{display:flex;flex-direction:column;gap:12px;}
+.dag-head{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.dag-head h3{margin:0;font-size:14px;font-weight:700;}
+.dag-meta{display:flex;gap:6px;flex-wrap:wrap;}
+.dag-layers{display:flex;flex-direction:column;gap:8px;}
+.dag-layer{display:flex;align-items:flex-start;gap:10px;}
+.dag-layer-label{
+  flex:0 0 26px;height:26px;line-height:26px;text-align:center;
+  border-radius:7px;background:var(--line-soft);
+  font-size:11px;font-weight:700;color:var(--muted);
+}
+.dag-layer-nodes{display:flex;gap:8px;flex-wrap:wrap;flex:1;}
+.dag-node{
+  min-width:132px;max-width:210px;padding:8px 10px;
+  border:1px solid var(--line);border-left-width:3px;border-radius:9px;
+  background:var(--surface,#fff);
+}
+.dag-node-seq{font-size:10.5px;color:var(--muted);font-weight:700;}
+.dag-node-title{font-size:12.5px;font-weight:700;margin:2px 0;line-height:1.35;}
+.dag-node-agent{font-size:11px;color:var(--muted);}
+.dag-node-skill{
+  display:inline-block;margin-top:4px;padding:1px 6px;border-radius:5px;
+  background:var(--line-soft);font-size:10.5px;color:var(--muted);
+}
+.dag-node-status{font-size:10.5px;margin-top:3px;font-weight:600;}
+.dag-edges{
+  font-size:11px;color:var(--muted);padding-top:8px;
+  border-top:1px solid var(--line-soft);line-height:1.7;
+}

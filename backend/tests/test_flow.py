@@ -58,8 +58,17 @@ def test_approval_breakpoint_and_resume():
     aps = wait(pending)
     ap = aps[0]
     assert ap["risk"] == "high"
-    run = client.get(f"/api/runs/{run_id}").json()
-    assert run["status"] == "awaiting_approval"
+
+    def breakpointed():
+        """等调度器落定：出现挂审批的 step，且 run 已进入 running（A1①）。"""
+        r = client.get(f"/api/runs/{run_id}").json()
+        if any(s["status"] == "awaiting_approval" for s in r["steps"]):
+            return r
+        return None
+
+    run = wait(breakpointed)
+    # Phase 2 DAG 语义（A1① 定版）：断点由 step 粒度承载，run 级保持 running
+    assert run["status"] == "running"
     # 断点处不执行外发：该 step 仍是等待审批
     assert any(s["status"] == "awaiting_approval" for s in run["steps"])
 

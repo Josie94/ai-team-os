@@ -6,6 +6,7 @@ from . import runner
 from .config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL
 from .models import Conversation, Message, ModelProvider, Tool
 from .policy import DEFAULT_TOOLS
+from .skills import seed_skills
 
 
 def seed_tools(db: Session):
@@ -112,5 +113,6 @@ def seed_demo_run(db: Session):
 def run_seed(db: Session):
     seed_tools(db)
     seed_providers(db)
+    seed_skills(db)
     seed_conversations(db)
     seed_demo_run(db)

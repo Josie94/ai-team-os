@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { api, subscribeEvents } from '../api';
 import type { RunDetail } from '../types';
 import StatusPill from '../components/StatusPill';
+import DagView from '../components/DagView';
 
 function fmtDuration(start?: string | null, end?: string | null) {
   if (!start) return '—';
@@ -184,6 +185,15 @@ export default function Run() {
         {error && <div className="banner bad">{error}</div>}
 
         <div className="run-grid">
+          <div className="panel">
+            <div className="panel-head">
+              <h3>DAG 执行图</h3>
+              <span className="count">{run.dag?.parallel_width ?? 1} 并行</span>
+            </div>
+            <div className="panel-body">
+              <DagView dag={run.dag} steps={run.steps} />
+            </div>
+          </div>
           <div className="panel">
             <div className="panel-head">
               <h3>步骤</h3>

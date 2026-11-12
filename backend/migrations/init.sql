@@ -76,6 +76,18 @@ CREATE TABLE IF NOT EXISTS tools (
   enabled     BOOLEAN NOT NULL DEFAULT true
 );
 
+-- Phase 2 技能系统 v1：技能 = 提示词模板 + 工具组合 + 参数预设
+CREATE TABLE IF NOT EXISTS skills (
+  name             VARCHAR(64) PRIMARY KEY,
+  label            VARCHAR(64) NOT NULL DEFAULT '',
+  description      TEXT NOT NULL DEFAULT '',
+  prompt_template  TEXT NOT NULL DEFAULT '',
+  tools            JSONB NOT NULL DEFAULT '[]'::jsonb,
+  args_preset      JSONB NOT NULL DEFAULT '{}'::jsonb,
+  enabled          BOOLEAN NOT NULL DEFAULT true,
+  created_at       TIMESTAMP NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS model_providers (
   id         VARCHAR(24) PRIMARY KEY,
   name       VARCHAR(64) NOT NULL,

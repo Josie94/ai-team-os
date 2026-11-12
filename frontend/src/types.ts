@@ -55,6 +55,24 @@ export interface Approval {
   wait_seconds: number;
 }
 
+export interface DagNode {
+  key: string;
+  seq: number;
+  title: string;
+  agent: string;
+  tool: string;
+  skill: string | null;
+  depends_on: string[];
+}
+
+export interface DagInfo {
+  nodes: DagNode[];
+  edges: { from: string; to: string }[];
+  topo_order: string[];
+  cyclic: boolean;
+  parallel_width: number;
+}
+
 export interface RunDetail {
   id: string;
   task_id: string;
@@ -71,6 +89,7 @@ export interface RunDetail {
   finished_at: string | null;
   steps: Step[];
   task: Task | null;
+  dag: DagInfo | null;
   events: { seq: number; type: string; payload: Record<string, unknown>; at: string }[];
   deliverables: Deliverable[];
   pending_approval: Approval | null;

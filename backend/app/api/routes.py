@@ -26,6 +26,7 @@ from ..models import (
     Tool,
 )
 from ..policy import policy_snapshot
+from ..skills import skill_catalog
 from ..state_machine import LABELS, STATES, transit
 
 router = APIRouter(prefix="/api")
@@ -56,6 +57,56 @@ def step_dict(s: Step) -> dict:
         "duration_ms": s.duration_ms,
         "started_at": s.started_at.isoformat() if s.started_at else None,
     }
+
+
+def dag_dict(steps: list[Step]) -> dict:
+    """DAG 图结构：节点 + 依赖边，供前端运行详情页渲染并行关系。"""
+    from ..dag import build_graph, topo_order, validate_graph
+
+    nodes, deps = build_graph(steps)
+    try:
+        validate_graph(deps)
+        order = topo_order(deps)
+        cyclic = False
+    except Exception:
+        order = sorted(nodes.keys(), key=lambda k: nodes[k].seq)
+        cyclic = True
+    return {
+        "nodes": [
+            {
+                "key": n.key,
+                "seq": n.seq,
+                "title": n.title,
+                "agent": n.agent,
+                "tool": n.tool,
+                "skill": n.skill,
+                "depends_on": n.depends_on,
+            }
+            for n in nodes.values()
+        ],
+        "edges": [{"from": p, "to": k} for k, parents in deps.items() for p in parents],
+        "topo_order": order,
+        "cyclic": cyclic,
+        "parallel_width": _parallel_width(deps),
+    }
+
+
+def _parallel_width(deps: dict[str, list[str]]) -> int:
+    """最大并行宽度：同一层可同时执行的节点数上界。"""
+    from ..dag import topo_order
+
+    try:
+        order = topo_order(deps)
+    except Exception:
+        return 1
+    depth: dict[str, int] = {}
+    for key in order:
+        parents = deps.get(key, [])
+        depth[key] = 0 if not parents else max((depth.get(p, 0) + 1) for p in parents)
+    layers: dict[int, int] = {}
+    for d in depth.values():
+        layers[d] = layers.get(d, 0) + 1
+    return max(layers.values()) if layers else 1
 
 
 def run_dict(r: Run, with_steps: bool = False) -> dict:
@@ -417,6 +468,7 @@ def get_run(rid: str, db: Session = Depends(get_db)):
     deliverables = db.scalars(select(Deliverable).where(Deliverable.run_id == rid)).all()
     d = run_dict(r, with_steps=True)
     d["task"] = task_dict(task) if task else None
+    d["dag"] = dag_dict(r.steps)
     d["events"] = [
         {"seq": e.seq, "type": e.type, "payload": e.payload, "at": e.created_at.isoformat()}
         for e in events
@@ -498,6 +550,26 @@ def decide(aid: str, payload: DecisionIn, db: Session = Depends(get_db)):
 def get_policy(db: Session = Depends(get_db)):
     tools = db.scalars(select(Tool).order_by(Tool.risk)).all()
     return policy_snapshot(tools)
+
+
+# ---------------- 技能（Phase 2 技能系统 v1） ----------------
+@router.get("/skills")
+def list_skills(db: Session = Depends(get_db)):
+    """技能清单：Phase 2 只做定义与引用，市场（浏览/分享）留给 P2 迭代。"""
+    return skill_catalog(db)
+
+
+@router.post("/skills/{name}/toggle")
+def toggle_skill(name: str, db: Session = Depends(get_db)):
+    """启停技能（插数据不改代码的延续：技能禁用后相关任务给出明确报错）。"""
+    from ..skills import get_skill
+
+    s = get_skill(db, name)
+    if not s:
+        raise HTTPException(404, "技能不存在")
+    s.enabled = not s.enabled
+    db.commit()
+    return {"name": s.name, "enabled": s.enabled}
 
 
 # ---------------- 模型 ----------------
